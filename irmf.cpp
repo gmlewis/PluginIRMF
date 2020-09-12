@@ -349,6 +349,7 @@ void main() {
 	}
 	bool Generate(const std::string& irmfID, const std::string& outPath)
 	{
+		/*
 		// https://www.irmf.com/api/v1/shaders/shaderID?key=appkey
 		httplib::SSLClient cli("www.irmf.com");
 
@@ -430,6 +431,7 @@ void main() {
 
 			return err.size() == 0;
 		}
+		*/
 
 		return false;
 	}

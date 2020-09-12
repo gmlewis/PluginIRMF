@@ -6,7 +6,7 @@
 #endif
 
 #include <imgui/imgui.h>
-#include "IRMF.h"
+#include "irmf.h"
 
 #ifdef WIN32
 # define FEXPORT __declspec(dllexport)
