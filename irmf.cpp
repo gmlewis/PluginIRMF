@@ -349,22 +349,20 @@ void main() {
 	}
 	bool Generate(const std::string& inURL, const std::string& outPath)
 	{
-		std::cerr << "GML0: " << inURL << std::endl;
 		// Examples:
 		// https://gmlewis.github.io/irmf-editor/?s=github.com/gmlewis/irmf/blob/master/examples/001-sphere/sphere-1.irmf
 		// https://github.com/gmlewis/irmf/blob/master/examples/001-sphere/sphere-1.irmf
+		// https://raw.githubusercontent.com/gmlewis/irmf/master/examples/001-sphere/sphere-1.irmf
 		const std::string& oldPrefix = "github.com/";
-		std::string irmfURL = "";
+		std::string irmfURL = inURL;
 		size_t startGitHub = inURL.find(oldPrefix);
-		std::cerr << "GML0a: " << startGitHub << std::endl;
 		if (startGitHub != std::string::npos) {
 			irmfURL = "https://raw.githubusercontent.com/" + inURL.substr(startGitHub+oldPrefix.length());
-			std::cerr << "GML1: " << irmfURL << std::endl;
 			size_t startBlob = irmfURL.find("/blob/");
 			if (startBlob != std::string::npos) {
 				irmfURL.replace(startBlob, 6, "/");
 			}
-		} else {
+		} else if (irmfURL.find("raw.githubusercontent.com") == std::string::npos) {
 			return false;
 		}
 
@@ -375,85 +373,103 @@ void main() {
 
 		std::vector<RenderPass> pipeline;
 
-		if (res && res->status == 200) {
-			std::string err;
-			json11::Json jdata = json11::Json::parse(res->body, err);
-			if (res) {
-				std::cerr << "GML3: " << jdata.dump() << std::endl;
-			}
-
-			if (jdata["Error"].is_string()) {
-				return false;
-			}
-			/*
-			if (jdata.is_object()) {
-				pipeline = ParseRenderPasses(jdata["Shader"]["renderpass"]);
-			}
-
-			if (!ghc::filesystem::exists(outPath))
-				ghc::filesystem::create_directories(outPath);
-
-			std::string shadersDir = outPath + "/shaders";
-			if (!ghc::filesystem::exists(shadersDir))
-				ghc::filesystem::create_directories(shadersDir);
-
-			// README.txt
-			WriteFile(outPath + "/README.txt", GenerateReadMe(jdata["Shader"]["info"]));
-
-			// project.sprj
-			pugi::xml_document doc = GenerateProject(pipeline);
-			std::ofstream sprjFile(outPath + "/project.sprj");
-			doc.print(sprjFile);
-			sprjFile.close();
-
-			// shaders
-			bool usesCommon = false;
-			for (const auto& item : pipeline) {
-				if (item.Type == "common") {
-					usesCommon = true;
-					WriteFile(outPath + "/common.glsl", item.Code);
-					break;
-				}
-			}
-
-			for (const auto& item : pipeline) {
-				if (item.Type == "common")
-					continue;
-				std::string shaderPath = outPath + "/shaders/" + item.Name + ".glsl";
-				WriteFile(shaderPath, GenerateGLSL(item.Code, usesCommon));
-			}
-			WriteFile(outPath + "/shaders/irmfVS.glsl", GenerateVertexShader());
-
-			// textures
-			std::vector<std::string> exportedTexs;
-			for (const auto& rpass : pipeline) {
-				for (const auto& inp : rpass.Inputs) {
-					if (inp.Type == "texture") {
-						if (std::count(exportedTexs.begin(), exportedTexs.end(), inp.Source) > 0)
-							continue;
-
-						exportedTexs.push_back(inp.Source);
-
-						std::string texPath = outPath + inp.Source;
-						if (!ghc::filesystem::exists(texPath))
-							ghc::filesystem::create_directories(ghc::filesystem::path(texPath).parent_path());
-
-						std::ofstream texFile(texPath, std::ofstream::binary);
-
-						auto res = cli.Get(inp.Source.c_str());
-
-						if (res && res->status == 200)
-							texFile.write(res->body.c_str(), res->body.size());
-
-						texFile.close();
-					}
-				}
-			}
-			*/
-			return err.size() == 0;
+		if (!res || res->status != 200) {
+			return false;
 		}
 
-		return false;
+		std::cerr << "GML3: " << res->body << std::endl;
+		if (res->body.substr(0, 3) != "/*{") {
+			std::cerr << "IRMF shader must start with: '/*{'" << std::endl;
+			return false;
+		}
+
+		size_t endJSON = res->body.find("}*/");
+		if (endJSON == std::string::npos) {
+			std::cerr << "IRMF shader must have JSON preamble ending with: '}*/'" << std::endl;
+			return false;
+		}
+
+		std::string jsonBody = res->body.substr(2, endJSON-1);
+
+		std::string err;
+		json11::Json jdata = json11::Json::parse(jsonBody, err);
+		std::cerr << "GML4: " << jdata.dump() << std::endl;
+
+		if (err != "") {
+			std::cerr << "JSON parsing failed: " << err << std::endl;
+			return false;
+		}
+
+		if (jdata["Error"].is_string()) {
+			std::cerr << "JSON parsing failed: " << jdata["Error"].string_value() << std::endl;
+			return false;
+		}
+		/*
+		if (jdata.is_object()) {
+			pipeline = ParseRenderPasses(jdata["Shader"]["renderpass"]);
+		}
+
+		if (!ghc::filesystem::exists(outPath))
+			ghc::filesystem::create_directories(outPath);
+
+		std::string shadersDir = outPath + "/shaders";
+		if (!ghc::filesystem::exists(shadersDir))
+			ghc::filesystem::create_directories(shadersDir);
+
+		// README.txt
+		WriteFile(outPath + "/README.txt", GenerateReadMe(jdata["Shader"]["info"]));
+
+		// project.sprj
+		pugi::xml_document doc = GenerateProject(pipeline);
+		std::ofstream sprjFile(outPath + "/project.sprj");
+		doc.print(sprjFile);
+		sprjFile.close();
+
+		// shaders
+		bool usesCommon = false;
+		for (const auto& item : pipeline) {
+			if (item.Type == "common") {
+				usesCommon = true;
+				WriteFile(outPath + "/common.glsl", item.Code);
+				break;
+			}
+		}
+
+		for (const auto& item : pipeline) {
+			if (item.Type == "common")
+				continue;
+			std::string shaderPath = outPath + "/shaders/" + item.Name + ".glsl";
+			WriteFile(shaderPath, GenerateGLSL(item.Code, usesCommon));
+		}
+		WriteFile(outPath + "/shaders/irmfVS.glsl", GenerateVertexShader());
+
+		// textures
+		std::vector<std::string> exportedTexs;
+		for (const auto& rpass : pipeline) {
+			for (const auto& inp : rpass.Inputs) {
+				if (inp.Type == "texture") {
+					if (std::count(exportedTexs.begin(), exportedTexs.end(), inp.Source) > 0)
+						continue;
+
+					exportedTexs.push_back(inp.Source);
+
+					std::string texPath = outPath + inp.Source;
+					if (!ghc::filesystem::exists(texPath))
+						ghc::filesystem::create_directories(ghc::filesystem::path(texPath).parent_path());
+
+					std::ofstream texFile(texPath, std::ofstream::binary);
+
+					auto res = cli.Get(inp.Source.c_str());
+
+					if (res && res->status == 200)
+						texFile.write(res->body.c_str(), res->body.size());
+
+					texFile.close();
+				}
+			}
+		}
+		*/
+		return err.size() == 0;
 	}
 
 
@@ -513,8 +529,16 @@ void main() {
 			if (ImGui::Button("OK")) {
 				std::string irmfLink = m_link;
 				std::string errMessage = "";
-				if (irmfLink.find("github.com") == std::string::npos) {
-					errMessage = "Please insert correct IRMF shader link with github.com.";
+				// Examples:
+				// https://gmlewis.github.io/irmf-editor/?s=github.com/gmlewis/irmf/blob/master/examples/001-sphere/sphere-1.irmf
+				// https://github.com/gmlewis/irmf/blob/master/examples/001-sphere/sphere-1.irmf
+				// https://raw.githubusercontent.com/gmlewis/irmf/master/examples/001-sphere/sphere-1.irmf
+				if (irmfLink.find("github.com") == std::string::npos &&
+						irmfLink.find("raw.githubusercontent.com") == std::string::npos) {
+					errMessage = "Please insert correct IRMF shader link from GitHub.";
+				}
+				if (irmfLink.find(".irmf") != irmfLink.length()-5) {
+					errMessage = "IRMF shader link must end in '.irmf'";
 				}
 
 				if (errMessage.size() == 0) {
