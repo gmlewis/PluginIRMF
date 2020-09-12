@@ -509,12 +509,12 @@ void main() {
 	{
 		// ##### UNIFORM MANAGER POPUP #####
 		if (m_isPopupOpened) {
-			ImGui::OpenPopup("Import IRMF project##irmf_import");
+			ImGui::OpenPopup("Import IRMF shader##irmf_import");
 			m_error = "";
 			m_isPopupOpened = false;
 		}
 		ImGui::SetNextWindowSize(ImVec2(530, 160), ImGuiCond_Once);
-		if (ImGui::BeginPopupModal("Import IRMF project##irmf_import")) {
+		if (ImGui::BeginPopupModal("Import IRMF shader##irmf_import")) {
 			ImGui::Text("IRMF link:"); ImGui::SameLine();
 			ImGui::PushItemWidth(-1);
 			ImGui::InputText("##irmf_link_insert", m_link, 256);
