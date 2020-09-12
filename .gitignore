@@ -1,0 +1,10 @@
+vsproject64/
+vsproject32/
+copy.bat
+CMakeCache.txt
+CMakeFiles/
+Makefile
+bin/
+cmake_install.cmake
+copy.sh
+APIKey.h
