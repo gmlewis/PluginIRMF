@@ -19,6 +19,7 @@ namespace irmf
 		int ID;
 		int Channel;
 	};
+
 	struct ShaderInputSampler
 	{
 		std::string Filter;
@@ -26,6 +27,7 @@ namespace irmf
 		bool FlipVertical;
 		bool SRGB;
 	};
+
 	struct ShaderInput
 	{
 		int ID;
@@ -35,6 +37,7 @@ namespace irmf
 
 		ShaderInputSampler Sampler;
 	};
+
 	struct RenderPass
 	{
 		std::vector<ShaderOutput> Outputs;
@@ -45,13 +48,23 @@ namespace irmf
 		std::string Code;
 	};
 
-	std::string GenerateReadMe(const json11::Json& info)
+	std::string GenerateReadMe(const json11::Json& info, const std::string& linkURL)
 	{
 		std::string ret = "";
 
-		ret += "Name: " + info["name"].string_value() + "\n";
-		ret += "Shader made by: " + info["username"].string_value() + "\n";
-		ret += "Link: https://gmlewis.github.io/irmf-editor/?s=" + info["id"].string_value() + "\n";
+		ret += "Author: " + info["author"].string_value() + "\n";
+		ret += "Copyright: " + info["copyright"].string_value() + "\n";
+		ret += "Date: " + info["date"].string_value() + "\n";
+		ret += "IRMF: " + info["irmf"].string_value() + "\n";
+		ret += "Materials: " + info["materials"].string_value() + "\n";
+		ret += "Max: " + info["max"].string_value() + "\n";
+		ret += "Min: " + info["min"].string_value() + "\n";
+		ret += "Notes: " + info["notes"].string_value() + "\n";
+		ret += "Options: " + info["options"].string_value() + "\n";
+		ret += "Title: " + info["title"].string_value() + "\n";
+		ret += "Units: " + info["units"].string_value() + "\n";
+		ret += "Version: " + info["version"].string_value() + "\n";
+		ret += "Link: " + linkURL + "\n";
 
 		return ret;
 	}
@@ -69,6 +82,7 @@ namespace irmf
 		}
 		return ret;
 	}
+
 	std::vector<ShaderInput> ParseInputs(const json11::Json& outputs)
 	{
 		std::vector<ShaderInput> ret;
@@ -127,6 +141,7 @@ namespace irmf
 			"</items>";
 		return ret;
 	}
+
 	std::string GenerateVariables()
 	{
 		std::string ret =
@@ -139,6 +154,7 @@ namespace irmf
 			"</variables>";
 		return ret;
 	}
+
 	std::string GenerateSettings()
 	{
 		std::string ret =
@@ -153,6 +169,7 @@ namespace irmf
 
 		return ret;
 	}
+
 	std::string GenerateVertexShader()
 	{
 		const char* vs = R"(#version 330
@@ -169,6 +186,7 @@ void main() {
 )";
 		return std::string(vs);
 	}
+
 	std::string GenerateGLSL(const std::string& code, bool usesCommon = false)
 	{
 		std::string ret = "#version 330\n\n" +
@@ -188,6 +206,7 @@ void main() {
 			"}";
 		return ret;
 	}
+
 	pugi::xml_document GenerateProject(const std::vector<RenderPass>& data)
 	{
 		pugi::xml_document doc;
@@ -347,6 +366,7 @@ void main() {
 		file << filedata;
 		file.close();
 	}
+
 	bool Generate(const std::string& inURL, const std::string& outPath)
 	{
 		// Examples:
@@ -368,7 +388,6 @@ void main() {
 
 		httplib::SSLClient cli("raw.githubusercontent.com");
 
-		std::cerr << "GML2: " << irmfURL << std::endl;
 		auto res = cli.Get(irmfURL.c_str());
 
 		std::vector<RenderPass> pipeline;
@@ -377,7 +396,6 @@ void main() {
 			return false;
 		}
 
-		std::cerr << "GML3: " << res->body << std::endl;
 		if (res->body.substr(0, 3) != "/*{") {
 			std::cerr << "IRMF shader must start with: '/*{'" << std::endl;
 			return false;
@@ -393,7 +411,6 @@ void main() {
 
 		std::string err;
 		json11::Json jdata = json11::Json::parse(jsonBody, err);
-		std::cerr << "GML4: " << jdata.dump() << std::endl;
 
 		if (err != "") {
 			std::cerr << "JSON parsing failed: " << err << std::endl;
@@ -409,15 +426,16 @@ void main() {
 			pipeline = ParseRenderPasses(jdata["Shader"]["renderpass"]);
 		}
 
-		if (!ghc::filesystem::exists(outPath))
+		if (!ghc::filesystem::exists(outPath)) {
 			ghc::filesystem::create_directories(outPath);
+		}
 
 		std::string shadersDir = outPath + "/shaders";
 		if (!ghc::filesystem::exists(shadersDir))
 			ghc::filesystem::create_directories(shadersDir);
 
 		// README.txt
-		WriteFile(outPath + "/README.txt", GenerateReadMe(jdata["Shader"]["info"]));
+		WriteFile(outPath + "/README.txt", GenerateReadMe(jdata, inURL));
 
 		// project.sprj
 		pugi::xml_document doc = GenerateProject(pipeline);

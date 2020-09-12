@@ -1,6 +1,8 @@
 # PluginIRMF
 
-SHADERed plugin that simplifies the process of editing your IRMF projects.
+PluginIRMF is a SHADERed plugin that simplifies the process of editing your IRMF shaders.
+
+See [irmf.io](http://irmf.io) for more details.
 
 ![Screenshot](./screenshot.png)
 
