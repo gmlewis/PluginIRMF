@@ -1,5 +1,5 @@
 #include "irmf.h"
-#include "APIKey.h"
+#include <iostream>
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
@@ -347,24 +347,45 @@ void main() {
 		file << filedata;
 		file.close();
 	}
-	bool Generate(const std::string& irmfID, const std::string& outPath)
+	bool Generate(const std::string& inURL, const std::string& outPath)
 	{
-		/*
-		// https://www.irmf.com/api/v1/shaders/shaderID?key=appkey
-		httplib::SSLClient cli("www.irmf.com");
+		std::cerr << "GML0: " << inURL << std::endl;
+		// Examples:
+		// https://gmlewis.github.io/irmf-editor/?s=github.com/gmlewis/irmf/blob/master/examples/001-sphere/sphere-1.irmf
+		// https://github.com/gmlewis/irmf/blob/master/examples/001-sphere/sphere-1.irmf
+		const std::string& oldPrefix = "github.com/";
+		std::string irmfURL = "";
+		size_t startGitHub = inURL.find(oldPrefix);
+		std::cerr << "GML0a: " << startGitHub << std::endl;
+		if (startGitHub != std::string::npos) {
+			irmfURL = "https://raw.githubusercontent.com/" + inURL.substr(startGitHub+oldPrefix.length());
+			std::cerr << "GML1: " << irmfURL << std::endl;
+			size_t startBlob = irmfURL.find("/blob/");
+			if (startBlob != std::string::npos) {
+				irmfURL.replace(startBlob, 6, "/");
+			}
+		} else {
+			return false;
+		}
 
-		auto res = cli.Get(("/api/v1/shaders/" + irmfID + "?key=" irmf_APIKEY).c_str());
+		httplib::SSLClient cli("raw.githubusercontent.com");
+
+		std::cerr << "GML2: " << irmfURL << std::endl;
+		auto res = cli.Get(irmfURL.c_str());
 
 		std::vector<RenderPass> pipeline;
 
 		if (res && res->status == 200) {
 			std::string err;
 			json11::Json jdata = json11::Json::parse(res->body, err);
+			if (res) {
+				std::cerr << "GML3: " << jdata.dump() << std::endl;
+			}
 
 			if (jdata["Error"].is_string()) {
 				return false;
 			}
-
+			/*
 			if (jdata.is_object()) {
 				pipeline = ParseRenderPasses(jdata["Shader"]["renderpass"]);
 			}
@@ -428,10 +449,9 @@ void main() {
 					}
 				}
 			}
-
+			*/
 			return err.size() == 0;
 		}
-		*/
 
 		return false;
 	}
@@ -455,15 +475,15 @@ void main() {
 	{
 		// ##### UNIFORM MANAGER POPUP #####
 		if (m_isPopupOpened) {
-			ImGui::OpenPopup("Import irmf project##st_import");
+			ImGui::OpenPopup("Import IRMF project##irmf_import");
 			m_error = "";
 			m_isPopupOpened = false;
 		}
 		ImGui::SetNextWindowSize(ImVec2(530, 160), ImGuiCond_Once);
-		if (ImGui::BeginPopupModal("Import irmf project##st_import")) {
-			ImGui::Text("irmf link:"); ImGui::SameLine();
+		if (ImGui::BeginPopupModal("Import IRMF project##irmf_import")) {
+			ImGui::Text("IRMF link:"); ImGui::SameLine();
 			ImGui::PushItemWidth(-1);
-			ImGui::InputText("##st_link_insert", m_link, 256);
+			ImGui::InputText("##irmf_link_insert", m_link, 256);
 			ImGui::PopItemWidth();
 
 			ImGui::Text("Project path:"); ImGui::SameLine();
@@ -490,24 +510,22 @@ void main() {
 				ImGui::Text("[ERROR] %s", m_error.c_str());
 
 
-			if (ImGui::Button("Ok")) {
-				std::string stLink = m_link;
+			if (ImGui::Button("OK")) {
+				std::string irmfLink = m_link;
 				std::string errMessage = "";
-				if (stLink.find("www.irmf.com/view/") == std::string::npos)
-					errMessage = "Please insert correct irmf link.";
+				if (irmfLink.find("github.com") == std::string::npos) {
+					errMessage = "Please insert correct IRMF shader link with github.com.";
+				}
 
 				if (errMessage.size() == 0) {
-					size_t lastSlash = stLink.find_last_of('/');
-					std::string id = stLink.substr(lastSlash+1);
-
 					std::string outPath(m_path);
 
 					if (outPath.size() == 0)
-						errMessage = "Please set the output path";
+						errMessage = "Please set the output path.";
 					else {
-						bool res = Generate(id, outPath);
+						bool res = Generate(irmfLink, outPath);
 						if (!res)
-							errMessage = "Shader either doesn't exist or doesn't have the PublicAPI flag set";
+							errMessage = "Could not find IRMF shader.";
 						else
 							OpenProject(UI, (outPath + "/project.sprj").c_str());
 					}
@@ -533,7 +551,7 @@ void main() {
 	void IRMF::ShowMenuItems(const char* name)
 	{
 		if (strcmp(name, "file") == 0) {
-			if (ImGui::Selectable("Import irmf project")) {
+			if (ImGui::Selectable("Import IRMF shader")) {
 				m_isPopupOpened = true;
 			}
 		}
