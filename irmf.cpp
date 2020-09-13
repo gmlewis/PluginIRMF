@@ -490,7 +490,6 @@ void main() {
 		return err.size() == 0;
 	}
 
-
 	bool IRMF::Init(bool isWeb, int sedVersion) {
 		m_isPopupOpened = false;
 
@@ -501,10 +500,12 @@ void main() {
 
 		return true;
 	}
+
 	void IRMF::InitUI(void* ctx)
 	{
 		ImGui::SetCurrentContext((ImGuiContext*)ctx);
 	}
+
 	void IRMF::Update(float delta)
 	{
 		// ##### UNIFORM MANAGER POPUP #####
@@ -590,6 +591,7 @@ void main() {
 	{
 		return strcmp(name, "file") == 0;
 	}
+
 	void IRMF::ShowMenuItems(const char* name)
 	{
 		if (strcmp(name, "file") == 0) {
