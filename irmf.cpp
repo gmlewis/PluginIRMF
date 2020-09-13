@@ -14,40 +14,6 @@
 
 namespace irmf
 {
-	struct ShaderOutput
-	{
-		int ID;
-		int Channel;
-	};
-
-	struct ShaderInputSampler
-	{
-		std::string Filter;
-		std::string Wrap;
-		bool FlipVertical;
-		bool SRGB;
-	};
-
-	struct ShaderInput
-	{
-		int ID;
-		int Channel;
-		std::string Type;
-		std::string Source;
-
-		ShaderInputSampler Sampler;
-	};
-
-	struct RenderPass
-	{
-		std::vector<ShaderOutput> Outputs;
-		std::vector<ShaderInput> Inputs;
-
-		std::string Name;
-		std::string Type;
-		std::string Code;
-	};
-
 	std::string GenerateReadMe(const json11::Json& info, const std::string& linkURL)
 	{
 		std::string ret = "";
@@ -65,64 +31,6 @@ namespace irmf
 		ret += "Units: " + info["units"].string_value() + "\n";
 		ret += "Version: " + info["version"].string_value() + "\n";
 		ret += "Link: " + linkURL + "\n";
-
-		return ret;
-	}
-
-	std::vector<ShaderOutput> ParseOutputs(const json11::Json& outputs)
-	{
-		std::vector<ShaderOutput> ret;
-		if (outputs.is_array()) {
-			for (const auto& output : outputs.array_items()) {
-				ShaderOutput data;
-				data.Channel = output["channel"].int_value();
-				data.ID = output["id"].int_value();
-				ret.push_back(data);
-			}
-		}
-		return ret;
-	}
-
-	std::vector<ShaderInput> ParseInputs(const json11::Json& outputs)
-	{
-		std::vector<ShaderInput> ret;
-		if (outputs.is_array()) {
-			for (const auto& output : outputs.array_items()) {
-				ShaderInput data;
-				data.Channel = output["channel"].int_value();
-				data.ID = output["id"].int_value();
-				data.Source = output["src"].string_value();
-				data.Type = output["ctype"].string_value();
-
-				data.Sampler.Filter = output["sampler"]["filter"].string_value();
-				data.Sampler.Wrap = output["sampler"]["wrap"].string_value();
-				data.Sampler.FlipVertical = output["sampler"]["vflip"].bool_value();
-				data.Sampler.SRGB = output["sampler"]["srgb"].bool_value();
-
-				ret.push_back(data);
-			}
-		}
-		return ret;
-	}
-
-	std::vector<RenderPass> ParseRenderPasses(const json11::Json& rpassContainer, const std::string& body)
-	{
-		std::vector<RenderPass> ret;
-
-		if (rpassContainer.is_array()) {
-			for (const auto& rpass : rpassContainer.array_items()) {
-				RenderPass data;
-
-				data.Inputs = ParseInputs(rpass["inputs"]);
-				data.Outputs = ParseOutputs(rpass["outputs"]);
-
-				data.Name = rpass["name"].string_value();
-				data.Type = rpass["type"].string_value();
-				data.Code = rpass["code"].string_value();
-
-				ret.push_back(data);
-			}
-		}
 
 		return ret;
 	}
@@ -187,10 +95,9 @@ void main() {
 		return std::string(vs);
 	}
 
-	std::string GenerateGLSL(const std::string& code, bool usesCommon = false)
+	std::string GenerateGLSL(const json11::Json& rpassContainer, const std::string& body)
 	{
-		std::string ret = "#version 330\n\n" +
-			std::string(usesCommon ? "#include <common.glsl>\n" : "") +
+		std::string ret = "#version 330\n\n"
 			"uniform vec2 iResolution;\n"
 			"uniform float iTime;\n"
 			"uniform float iTimeDelta;\n"
@@ -200,14 +107,14 @@ void main() {
 			"uniform sampler2D iChannel1;\n"
 			"uniform sampler2D iChannel2;\n"
 			"uniform sampler2D iChannel3;\n"
-			"out vec4 irmf_outcolor;\n\n" + code + "\n"
+			"out vec4 irmf_outcolor;\n\n" + body + "\n"
 			"void main()\n{\n"
 			"\tmainImage(irmf_outcolor, gl_FragCoord.xy);\n"
 			"}";
 		return ret;
 	}
 
-	pugi::xml_document GenerateProject(const std::vector<RenderPass>& data)
+	pugi::xml_document GenerateProject(const json11::Json& rpassContainer, const std::string& body)
 	{
 		pugi::xml_document doc;
 		pugi::xml_node project = doc.append_child("project");
@@ -224,61 +131,28 @@ void main() {
 		std::map<int, std::vector<std::pair<std::string, int>>> rtBind;
 		std::vector<std::string> textures, textureTypes;
 		std::map<std::string, std::vector<std::pair<std::string, int>>> texBinds;
-		for (const auto& rpass : data) {
-			if (rpass.Type == "buffer") {
-				rts.push_back(rpass.Name);
-				rtIds.push_back(rpass.Outputs[0].ID);
-			}
-			for (const auto& inp : rpass.Inputs) {
-				if (inp.Type == "texture" || inp.Type == "keyboard") {
-					std::string name = inp.Source;
-					if (inp.Type == "keyboard")
-						name = KEYBOARD_TEXTURE_NAME;
-
-					if (std::count(textures.begin(), textures.end(), name) == 0)
-						textures.push_back(name);
-
-					texBinds[name].push_back(std::make_pair(rpass.Name, inp.Channel));
-				}
-				else if (inp.Type == "buffer")
-					rtBind[inp.ID].push_back(std::make_pair(rpass.Name, inp.Channel));
-			}
-
-			index++;
-		}
 
 		/////// PIPELINE ///////
-		for (int i = data.size() - 1; i >= 0; i--) {
-			const RenderPass& pass = data[i];
+		pugi::xml_node node = pipelineNode.append_child("pass");
+		node.append_attribute("name").set_value("irmf");
+		node.append_attribute("type").set_value("shader");
+		node.append_attribute("active").set_value("true");
 
-			if (pass.Type == "common")
-				continue;
+		pugi::xml_node vsNode = node.append_child("shader");
+		vsNode.append_attribute("type").set_value("vs");
+		vsNode.append_attribute("path").set_value("shaders/irmfVS.glsl");
 
-			pugi::xml_node node = pipelineNode.append_child("pass");
-			node.append_attribute("name").set_value(pass.Name.c_str());
-			node.append_attribute("type").set_value("shader");
-			node.append_attribute("active").set_value("true");
+		pugi::xml_node psNode = node.append_child("shader");
+		psNode.append_attribute("type").set_value("ps");
+		psNode.append_attribute("path").set_value("shaders/irmfFS.glsl");
 
-			pugi::xml_node vsNode = node.append_child("shader");
-			vsNode.append_attribute("type").set_value("vs");
-			vsNode.append_attribute("path").set_value("shaders/irmfVS.glsl");
+		node.append_child("rendertexture");
 
-			pugi::xml_node psNode = node.append_child("shader");
-			psNode.append_attribute("type").set_value("ps");
-			psNode.append_attribute("path").set_value(("shaders/" + pass.Name + ".glsl").c_str());
+		std::string itemsNode = GenerateItems(0);
+		node.append_buffer(itemsNode.c_str(), itemsNode.size());
 
-			if (pass.Type == "buffer")
-				node.append_child("rendertexture").append_attribute("name").set_value(pass.Name.c_str());
-			else
-				node.append_child("rendertexture");
-
-			std::string itemsNode = GenerateItems(data.size() - i);
-			node.append_buffer(itemsNode.c_str(), itemsNode.size());
-
-			std::string varNode = GenerateVariables();
-			node.append_buffer(varNode.c_str(), varNode.size());
-		}
-
+		std::string varNode = GenerateVariables();
+		node.append_buffer(varNode.c_str(), varNode.size());
 
 		/////// OBJECTS ///////
 		for (int i = 0; i < rts.size(); i++) {
@@ -300,62 +174,10 @@ void main() {
 				bindNode.append_attribute("name").set_value(pair.first.c_str());
 			}
 		}
-		for (int i = 0; i < textures.size(); i++) {
-			pugi::xml_node node = objectsNode.append_child("object");
-			node.append_attribute("type").set_value("texture");
-
-			if (textures[i] == KEYBOARD_TEXTURE_NAME) {
-				node.append_attribute("name").set_value(textures[i].c_str());
-				node.append_attribute("keyboard_texture").set_value(true);
-			} else {
-				node.append_attribute("path").set_value(("." + textures[i]).c_str());
-
-				ShaderInputSampler samplerInfo;
-				for (int j = 0; j < data.size(); j++)
-					for (int k = 0; k < data[j].Inputs.size(); k++) {
-						if (data[j].Inputs[k].Source == textures[i])
-							samplerInfo = data[j].Inputs[k].Sampler;
-					}
-
-				// vertical flip
-				node.append_attribute("vflip").set_value(samplerInfo.FlipVertical);
-
-				// filter
-				if (samplerInfo.Filter == "linear") {
-					node.append_attribute("min_filter").set_value("Nearest");
-					node.append_attribute("mag_filter").set_value("Nearest");
-				} else if (samplerInfo.Filter == "nearest") {
-					node.append_attribute("min_filter").set_value("Linear");
-					node.append_attribute("mag_filter").set_value("Linear");
-				} else if (samplerInfo.Filter == "mipmap") {
-					/* TODO: not sure what this is supposed to be */
-					node.append_attribute("min_filter").set_value("Linear_MipmapLinear");
-					node.append_attribute("mag_filter").set_value("Linear");
-				}
-
-				// wrap
-				if (samplerInfo.Wrap == "clamp") {
-					node.append_attribute("wrap_s").set_value("ClampToEdge");
-					node.append_attribute("wrap_t").set_value("ClampToEdge");
-				} else if (samplerInfo.Wrap == "repeat") {
-					node.append_attribute("wrap_s").set_value("Repeat");
-					node.append_attribute("wrap_t").set_value("Repeat");
-				}
-			}
-
-			const std::vector<std::pair<std::string, int>>& myBind = texBinds[textures[i]];
-			for (int j = 0; j < myBind.size(); j++) {
-				auto& pair = myBind[j];
-				pugi::xml_node bindNode = node.append_child("bind");
-				bindNode.append_attribute("slot").set_value(pair.second);
-				bindNode.append_attribute("name").set_value(pair.first.c_str());
-			}
-		}
 
 		/////// SETTINGS ///////
 		std::string settings = GenerateSettings();
 		settingsNode.append_buffer(settings.c_str(), settings.size());
-
 
 		return doc;
 	}
@@ -390,8 +212,6 @@ void main() {
 
 		auto res = cli.Get(irmfURL.c_str());
 
-		std::vector<RenderPass> pipeline;
-
 		if (!res || res->status != 200) {
 			return false;
 		}
@@ -422,10 +242,6 @@ void main() {
 			return false;
 		}
 
-		if (jdata.is_object()) {
-			pipeline = ParseRenderPasses(jdata, res->body);
-		}
-
 		if (!ghc::filesystem::exists(outPath)) {
 			ghc::filesystem::create_directories(outPath);
 		}
@@ -439,55 +255,15 @@ void main() {
 		WriteFile(outPath + "/README.txt", GenerateReadMe(jdata, inURL));
 
 		// project.sprj
-		pugi::xml_document doc = GenerateProject(pipeline);
+		pugi::xml_document doc = GenerateProject(jdata, res->body);
 		std::ofstream sprjFile(outPath + "/project.sprj");
 		doc.print(sprjFile);
 		sprjFile.close();
 
 		// shaders
-		bool usesCommon = false;
-		for (const auto& item : pipeline) {
-			if (item.Type == "common") {
-				usesCommon = true;
-				WriteFile(outPath + "/common.glsl", item.Code);
-				break;
-			}
-		}
-
-		for (const auto& item : pipeline) {
-			if (item.Type == "common") {
-				continue;
-			}
-			std::string shaderPath = outPath + "/shaders/" + item.Name + ".glsl";
-			WriteFile(shaderPath, GenerateGLSL(item.Code, usesCommon));
-		}
+		std::string shaderPath = outPath + "/shaders/irmfFS.glsl";
+		WriteFile(shaderPath, GenerateGLSL(jdata, res->body));
 		WriteFile(outPath + "/shaders/irmfVS.glsl", GenerateVertexShader());
-
-		// textures
-		// std::vector<std::string> exportedTexs;
-		// for (const auto& rpass : pipeline) {
-		// 	for (const auto& inp : rpass.Inputs) {
-		// 		if (inp.Type == "texture") {
-		// 			if (std::count(exportedTexs.begin(), exportedTexs.end(), inp.Source) > 0)
-		// 				continue;
-
-		// 			exportedTexs.push_back(inp.Source);
-
-		// 			std::string texPath = outPath + inp.Source;
-		// 			if (!ghc::filesystem::exists(texPath))
-		// 				ghc::filesystem::create_directories(ghc::filesystem::path(texPath).parent_path());
-
-		// 			std::ofstream texFile(texPath, std::ofstream::binary);
-
-		// 			auto res = cli.Get(inp.Source.c_str());
-
-		// 			if (res && res->status == 200)
-		// 				texFile.write(res->body.c_str(), res->body.size());
-
-		// 			texFile.close();
-		// 		}
-		// 	}
-		// }
 
 		return err.size() == 0;
 	}
