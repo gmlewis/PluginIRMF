@@ -80,16 +80,24 @@ namespace irmf
 
 	std::string GenerateVertexShader()
 	{
-		const char* vs = R"(#version 330
+// 		const char* vs = R"(#version 330
 
-layout (location = 0) in vec2 pos;
-layout (location = 1) in vec2 uv;
+// layout (location = 0) in vec2 pos;
+// layout (location = 1) in vec2 uv;
 
-out vec2 outUV;
+// out vec2 outUV;
 
+// void main() {
+// 	gl_Position = vec4(pos, 0.0, 1.0);
+// 	outUV = uv;
+// }
+// )";
+
+		const char* vs = R"(#version 300 es
+out vec4 v_xyz;
 void main() {
-	gl_Position = vec4(pos, 0.0, 1.0);
-	outUV = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+  v_xyz = modelMatrix * vec4( position, 1.0 );
 }
 )";
 		return std::string(vs);
