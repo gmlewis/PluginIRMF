@@ -105,7 +105,7 @@ namespace irmf
 		return ret;
 	}
 
-	std::vector<RenderPass> ParseRenderPasses(const json11::Json& rpassContainer)
+	std::vector<RenderPass> ParseRenderPasses(const json11::Json& rpassContainer, const std::string& body)
 	{
 		std::vector<RenderPass> ret;
 
@@ -421,9 +421,9 @@ void main() {
 			std::cerr << "JSON parsing failed: " << jdata["Error"].string_value() << std::endl;
 			return false;
 		}
-		/*
+
 		if (jdata.is_object()) {
-			pipeline = ParseRenderPasses(jdata["Shader"]["renderpass"]);
+			pipeline = ParseRenderPasses(jdata, res->body);
 		}
 
 		if (!ghc::filesystem::exists(outPath)) {
@@ -431,8 +431,9 @@ void main() {
 		}
 
 		std::string shadersDir = outPath + "/shaders";
-		if (!ghc::filesystem::exists(shadersDir))
+		if (!ghc::filesystem::exists(shadersDir)) {
 			ghc::filesystem::create_directories(shadersDir);
+		}
 
 		// README.txt
 		WriteFile(outPath + "/README.txt", GenerateReadMe(jdata, inURL));
@@ -454,39 +455,40 @@ void main() {
 		}
 
 		for (const auto& item : pipeline) {
-			if (item.Type == "common")
+			if (item.Type == "common") {
 				continue;
+			}
 			std::string shaderPath = outPath + "/shaders/" + item.Name + ".glsl";
 			WriteFile(shaderPath, GenerateGLSL(item.Code, usesCommon));
 		}
 		WriteFile(outPath + "/shaders/irmfVS.glsl", GenerateVertexShader());
 
 		// textures
-		std::vector<std::string> exportedTexs;
-		for (const auto& rpass : pipeline) {
-			for (const auto& inp : rpass.Inputs) {
-				if (inp.Type == "texture") {
-					if (std::count(exportedTexs.begin(), exportedTexs.end(), inp.Source) > 0)
-						continue;
+		// std::vector<std::string> exportedTexs;
+		// for (const auto& rpass : pipeline) {
+		// 	for (const auto& inp : rpass.Inputs) {
+		// 		if (inp.Type == "texture") {
+		// 			if (std::count(exportedTexs.begin(), exportedTexs.end(), inp.Source) > 0)
+		// 				continue;
 
-					exportedTexs.push_back(inp.Source);
+		// 			exportedTexs.push_back(inp.Source);
 
-					std::string texPath = outPath + inp.Source;
-					if (!ghc::filesystem::exists(texPath))
-						ghc::filesystem::create_directories(ghc::filesystem::path(texPath).parent_path());
+		// 			std::string texPath = outPath + inp.Source;
+		// 			if (!ghc::filesystem::exists(texPath))
+		// 				ghc::filesystem::create_directories(ghc::filesystem::path(texPath).parent_path());
 
-					std::ofstream texFile(texPath, std::ofstream::binary);
+		// 			std::ofstream texFile(texPath, std::ofstream::binary);
 
-					auto res = cli.Get(inp.Source.c_str());
+		// 			auto res = cli.Get(inp.Source.c_str());
 
-					if (res && res->status == 200)
-						texFile.write(res->body.c_str(), res->body.size());
+		// 			if (res && res->status == 200)
+		// 				texFile.write(res->body.c_str(), res->body.size());
 
-					texFile.close();
-				}
-			}
-		}
-		*/
+		// 			texFile.close();
+		// 		}
+		// 	}
+		// }
+
 		return err.size() == 0;
 	}
 
